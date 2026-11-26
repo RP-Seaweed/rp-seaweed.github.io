@@ -1,0 +1,1860 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>時光聚點 — 跨裝置空閒時間統計與權限管理系統</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans TC", sans-serif;
+    }
+    .slot-cell {
+      user-select: none;
+      touch-action: none;
+      transition: background-color 0.12s ease, transform 0.08s ease;
+    }
+    .slot-cell:active {
+      transform: scale(0.97);
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
+  <!-- 頂部導覽列 -->
+  <header id="app-header" class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200 hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3 min-w-0">
+        <button id="brand-home-btn" type="button" class="flex items-center gap-2.5 text-left group focus:outline-none">
+          <div class="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-xs group-hover:bg-indigo-700 transition">
+            5m
+          </div>
+          <div class="truncate">
+            <div class="text-sm sm:text-base font-bold text-slate-900 truncate">時光聚點</div>
+            <div class="text-[11px] text-slate-500 hidden sm:block truncate">跨裝置空閒時間統計與權限中心</div>
+          </div>
+        </button>
+
+        <nav id="main-nav" class="hidden md:flex items-center gap-1 ml-4">
+          <button id="nav-rooms-btn" type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            我的房間
+          </button>
+          <button id="nav-admin-btn" type="button" class="hidden px-3 py-1.5 rounded-lg text-sm font-medium text-amber-800 bg-amber-50 hover:bg-amber-100 transition">
+            管理者控制台
+          </button>
+          <button id="nav-password-btn" type="button" class="px-3 py-1.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            更改密碼
+          </button>
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+        <div id="sync-status-badge" class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span id="sync-status-text">雲端同步中</span>
+        </div>
+
+        <div class="text-right">
+          <div class="flex items-center justify-end gap-1.5">
+            <span id="current-user-name" class="text-xs sm:text-sm font-bold text-slate-900"></span>
+            <span id="current-user-role-badge" class="text-[10px] px-2 py-0.5 rounded-full font-semibold"></span>
+          </div>
+        </div>
+
+        <button id="logout-btn" type="button" class="px-3 py-1.5 rounded-xl text-xs sm:text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 border border-slate-200 transition">
+          登出
+        </button>
+      </div>
+    </div>
+
+    <!-- 手機版次導覽 -->
+    <div id="mobile-subnav" class="flex md:hidden items-center justify-around border-t border-slate-100 bg-slate-50/80 px-2 py-1.5 text-xs">
+      <button id="mnav-rooms-btn" type="button" class="px-3 py-1.5 rounded-lg font-medium text-slate-700 hover:bg-white">我的房間</button>
+      <button id="mnav-admin-btn" type="button" class="hidden px-3 py-1.5 rounded-lg font-medium text-amber-800 bg-amber-100/70">管理者控制台</button>
+      <button id="mnav-password-btn" type="button" class="px-3 py-1.5 rounded-lg font-medium text-slate-700 hover:bg-white">更改密碼</button>
+    </div>
+  </header>
+
+  <!-- 訊息提示列 -->
+  <div id="toast-banner" class="fixed bottom-5 right-5 z-50 hidden max-w-sm w-full pointer-events-none">
+    <div id="toast-inner" class="pointer-events-auto rounded-2xl shadow-lg border px-4 py-3 text-sm font-medium flex items-center justify-between gap-3 bg-slate-900 text-white border-slate-800">
+      <span id="toast-message"></span>
+      <button id="toast-close-btn" type="button" class="text-slate-400 hover:text-white text-xs">✕</button>
+    </div>
+  </div>
+
+  <!-- 主內容容器 -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+    <!-- 1. 登入 / 註冊畫面 -->
+    <section id="auth-view" class="min-h-[75vh] flex items-center justify-center">
+      <div class="w-full max-w-md bg-white rounded-3xl shadow-sm border border-slate-200/90 p-6 sm:p-8">
+        <div class="flex items-center gap-3 mb-6">
+          <div class="w-11 h-11 rounded-2xl bg-indigo-600 text-white flex items-center justify-center font-extrabold text-base shadow-xs">
+            5m
+          </div>
+          <div>
+            <h1 class="text-xl font-extrabold text-slate-900 tracking-tight">時光聚點</h1>
+            <p class="text-xs text-slate-500">跨裝置私人空閒時間統計系統</p>
+          </div>
+        </div>
+
+        <!-- 登入 / 註冊分頁切換 -->
+        <div class="grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-slate-100 mb-6">
+          <button id="tab-login-btn" type="button" class="py-2 rounded-xl text-sm font-semibold bg-white text-slate-900 shadow-2xs transition">
+            登入帳號
+          </button>
+          <button id="tab-register-btn" type="button" class="py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
+            註冊新帳號
+          </button>
+        </div>
+
+        <!-- 登入表單 -->
+        <form id="login-form" class="space-y-4">
+          <div>
+            <label for="login-username" class="block text-xs font-semibold text-slate-700 mb-1.5">用戶名稱</label>
+            <input id="login-username" type="text" required autocomplete="username"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <label for="login-password" class="block text-xs font-semibold text-slate-700 mb-1.5">密碼</label>
+            <input id="login-password" type="password" required autocomplete="current-password"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div id="login-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"></div>
+          <button id="login-submit-btn" type="submit"
+            class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition disabled:opacity-50">
+            登入並查看受邀房間
+          </button>
+        </form>
+
+        <!-- 註冊表單 -->
+        <form id="register-form" class="space-y-4 hidden">
+          <div>
+            <label for="register-username" class="block text-xs font-semibold text-slate-700 mb-1.5">設定用戶名稱（自訂顯示名稱）</label>
+            <input id="register-username" type="text" required autocomplete="username" placeholder="例如：小美、阿傑"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <label for="register-password" class="block text-xs font-semibold text-slate-700 mb-1.5">設定密碼（至少 6 個字元）</label>
+            <input id="register-password" type="password" required minlength="6" autocomplete="new-password" placeholder="輸入密碼"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div>
+            <label for="register-password-confirm" class="block text-xs font-semibold text-slate-700 mb-1.5">再次確認密碼</label>
+            <input id="register-password-confirm" type="password" required minlength="6" autocomplete="new-password" placeholder="再次輸入密碼"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+          </div>
+          <div id="register-error" class="hidden text-xs text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2"></div>
+          <button id="register-submit-btn" type="submit"
+            class="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-xs transition disabled:opacity-50">
+            建立普通用戶帳號並登入
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2. 已受邀房間列表畫面 -->
+    <section id="rooms-view" class="hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">已受邀的私人房間</h2>
+          <p class="text-sm text-slate-500 mt-1">僅顯示您已被邀請加入的房間；所有資料皆跨裝置即時同步。</p>
+        </div>
+        <button id="open-create-room-modal-btn" type="button"
+          class="hidden items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-xs transition shrink-0">
+          <span>＋ 建立新房間</span>
+        </button>
+      </div>
+
+      <div id="invited-rooms-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+
+      <div id="empty-rooms-state" class="hidden bg-white rounded-3xl border border-dashed border-slate-300 p-10 text-center">
+        <div class="text-base font-bold text-slate-800 mb-1">目前尚無受邀的房間</div>
+        <p id="empty-rooms-hint" class="text-sm text-slate-500 max-w-md mx-auto">
+          請聯繫房間管理者將您的帳號加入私人房間邀請名單。
+        </p>
+      </div>
+    </section>
+
+    <!-- 3. 單一房間詳情 / 5 分鐘有空時間填寫與分析畫面 -->
+    <section id="room-detail-view" class="hidden space-y-6">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <button id="back-to-rooms-btn" type="button"
+          class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-medium text-slate-700 bg-white hover:bg-slate-100 border border-slate-200 transition">
+          ← 返回房間列表
+        </button>
+
+        <div id="room-admin-quick-actions" class="hidden flex items-center gap-2">
+          <button id="open-invite-modal-btn" type="button"
+            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 transition">
+            管理受邀成員
+          </button>
+        </div>
+      </div>
+
+      <!-- 房間基本資訊卡 -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div>
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">私人房間</span>
+              <span id="detail-room-period" class="text-xs font-medium text-slate-500"></span>
+              <span id="detail-room-hours" class="text-xs font-medium text-slate-500"></span>
+            </div>
+            <h2 id="detail-room-title" class="text-xl sm:text-2xl font-extrabold text-slate-900 mt-2"></h2>
+            <p id="detail-room-desc" class="text-sm text-slate-600 mt-1"></p>
+          </div>
+
+          <div class="bg-slate-50 rounded-2xl border border-slate-200/80 px-4 py-3 shrink-0">
+            <div class="text-[11px] font-semibold text-slate-500 mb-1.5">受邀成員（<span id="detail-invited-count">0</span> 人）</div>
+            <div id="detail-invited-badges" class="flex flex-wrap gap-1.5 max-w-md"></div>
+          </div>
+        </div>
+
+        <!-- 模式切換列 -->
+        <div class="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <button id="mode-my-edit-btn" type="button"
+              class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 text-white transition">
+              我的有空時間（5分鐘）
+            </button>
+            <button id="mode-overview-btn" type="button"
+              class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition">
+              團隊重疊總覽
+            </button>
+            <button id="mode-admin-detail-btn" type="button"
+              class="hidden px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-amber-100 text-amber-900 hover:bg-amber-200 transition">
+              管理者詳細分析
+            </button>
+
+            <!-- 管理者專屬：總覽與詳細分析的顯示單位選擇器（5 / 10 / 15 / 20 / 30 分鐘） -->
+            <div id="admin-unit-selector-wrap" class="hidden items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-xl px-2.5 py-1.5">
+              <label for="admin-bucket-unit-select" class="text-xs font-semibold text-amber-950 whitespace-nowrap">顯示單位：</label>
+              <select id="admin-bucket-unit-select" class="text-xs font-bold bg-white border border-amber-300 rounded-lg px-2 py-1 text-amber-950 focus:outline-none focus:ring-2 focus:ring-amber-500">
+                <option value="5">5 分鐘</option>
+                <option value="10">10 分鐘</option>
+                <option value="15">15 分鐘</option>
+                <option value="20">20 分鐘</option>
+                <option value="30">30 分鐘</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 圖例 -->
+          <div class="flex flex-wrap items-center gap-3 text-xs text-slate-600">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded bg-emerald-500 inline-block"></span> 有空
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded bg-white border border-slate-300 inline-block"></span> 未填／無空
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="w-3.5 h-3.5 rounded bg-emerald-600 inline-block"></span> 全員有空
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 一鍵輸入一段長時段有空區塊（編輯模式顯示） -->
+      <div id="bulk-range-card" class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">一鍵輸入一段長時段有空</h3>
+            <p class="text-xs text-slate-500 mt-0.5">選擇日期與起訖時間（支援 5 分鐘刻度），一鍵批量標記或清除您的有空時段。</p>
+          </div>
+          <button id="clear-day-free-btn" type="button"
+            class="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition">
+            清除當日全部有空時段
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label for="bulk-date-select" class="block text-xs font-semibold text-slate-700 mb-1">日期</label>
+            <select id="bulk-date-select" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+          </div>
+          <div>
+            <label for="bulk-start-time" class="block text-xs font-semibold text-slate-700 mb-1">開始時間</label>
+            <input id="bulk-start-time" type="time" step="300" value="09:00"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label for="bulk-end-time" class="block text-xs font-semibold text-slate-700 mb-1">結束時間</label>
+            <input id="bulk-end-time" type="time" step="300" value="12:00"
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <button id="bulk-apply-free-btn" type="button"
+            class="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold shadow-2xs transition">
+            一鍵設為有空
+          </button>
+          <button id="bulk-remove-free-btn" type="button"
+            class="w-full py-2.5 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-semibold transition">
+            一鍵取消該段有空
+          </button>
+        </div>
+      </div>
+
+      <!-- 管理者詳細分析面板 -->
+      <div id="admin-analytics-panel" class="hidden bg-amber-50/60 rounded-3xl border border-amber-200 p-5 sm:p-6 space-y-5">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-200/80 text-amber-950">管理者詳細分析</span>
+            <h3 class="text-lg font-extrabold text-slate-900 mt-1">成員填寫明細、重疊時段與統計報表</h3>
+          </div>
+          <button id="copy-admin-summary-btn" type="button"
+            class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white hover:bg-amber-100 text-amber-950 border border-amber-300 transition self-start sm:self-auto">
+            複製當日統計摘要
+          </button>
+        </div>
+
+        <!-- 每位成員有空時數與時段摘要 -->
+        <div id="admin-member-stats-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+
+        <!-- 全員有空時段與點擊格明細 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div class="bg-white rounded-2xl border border-amber-200/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900 mb-2">全體受邀成員皆有空的時段</h4>
+            <div id="admin-all-free-ranges" class="text-xs text-slate-600 space-y-1.5 max-h-48 overflow-y-auto"></div>
+          </div>
+          <div class="bg-white rounded-2xl border border-amber-200/80 p-4">
+            <h4 class="text-sm font-bold text-slate-900 mb-2">選定刻度詳細名單（含 5 分鐘明細）</h4>
+            <div id="admin-selected-slot-detail" class="text-xs text-slate-600">
+              點擊下方時間網格中的任一區塊，即可查看該時段與旗下各 5 分鐘刻度的每位成員有空狀態。
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 日期分頁與時間網格 -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-2xs space-y-4">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">時間網格</h3>
+            <p id="grid-interaction-hint" class="text-xs text-slate-500 mt-0.5">
+              點擊或按住拖曳塗抹即可切換 5 分鐘有空狀態。
+            </p>
+          </div>
+          <div id="date-tabs-bar" class="flex items-center gap-1.5 overflow-x-auto pb-1"></div>
+        </div>
+
+        <div id="timeline-grid-container" class="rounded-2xl border border-slate-200 overflow-x-auto"></div>
+      </div>
+    </section>
+
+    <!-- 4. 管理者控制台（建立帳號/隨機密碼、任命管理者、查看與更改所有密碼） -->
+    <section id="admin-console-view" class="hidden space-y-6">
+      <div>
+        <h2 class="text-2xl font-extrabold text-slate-900 tracking-tight">管理者控制台</h2>
+        <p class="text-sm text-slate-500 mt-1">管理系統帳號、生成隨機密碼、查看與重設所有用戶密碼，以及任命管理者。</p>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- 建立新帳號並生成隨機密碼 -->
+        <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-2xs space-y-4">
+          <h3 class="text-base font-bold text-slate-900">建立新用戶帳號與隨機密碼</h3>
+          <p class="text-xs text-slate-500">建立的帳號預設為「普通用戶」，可隨時生成高強度隨機密碼。</p>
+
+          <form id="admin-create-user-form" class="space-y-4">
+            <div>
+              <label for="new-user-username" class="block text-xs font-semibold text-slate-700 mb-1.5">新用戶名稱</label>
+              <input id="new-user-username" type="text" required placeholder="輸入用戶名稱"
+                class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+            </div>
+
+            <div>
+              <label for="new-user-password" class="block text-xs font-semibold text-slate-700 mb-1.5">密碼（可手動輸入或一鍵隨機生成）</label>
+              <div class="flex gap-2">
+                <input id="new-user-password" type="text" required minlength="6" placeholder="點擊右側按鈕生成隨機密碼"
+                  class="flex-1 rounded-xl border border-slate-300 px-3.5 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                <button id="generate-random-pw-btn" type="button"
+                  class="px-3.5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-bold whitespace-nowrap transition">
+                  生成隨機密碼
+                </button>
+              </div>
+            </div>
+
+            <button type="submit"
+              class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-2xs transition">
+              建立帳號
+            </button>
+          </form>
+        </div>
+
+        <!-- 權限與密碼規則說明 -->
+        <div class="bg-amber-50/70 rounded-3xl border border-amber-200 p-6 space-y-3">
+          <h3 class="text-base font-bold text-amber-950">權限與密碼管理說明</h3>
+          <ul class="text-xs sm:text-sm text-amber-900 space-y-2 list-disc pl-5">
+            <li>管理者可查看所有帳號的密碼，並可為任何用戶重新生成隨機密碼或自訂新密碼。</li>
+            <li>只有 <span class="font-bold">RP水草</span> 可以將普通用戶任命為管理者，或撤銷其他管理者的管理員身分。</li>
+            <li>所有帳號與密碼皆儲存於雲端，可在不同裝置上登入存取。</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 所有帳號列表 -->
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 shadow-2xs space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-base font-bold text-slate-900">所有系統帳號（<span id="admin-total-users-count">0</span>）</h3>
+        </div>
+        <div id="admin-users-list" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- 5. 更改自身密碼畫面 -->
+    <section id="password-view" class="hidden max-w-lg mx-auto">
+      <div class="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-2xs space-y-5">
+        <div>
+          <h2 class="text-xl font-extrabold text-slate-900">更改我的密碼</h2>
+          <p class="text-xs text-slate-500 mt-1">更新後將立即套用至所有登入裝置。</p>
+        </div>
+
+        <form id="change-own-password-form" class="space-y-4">
+          <div>
+            <label for="current-pw-input" class="block text-xs font-semibold text-slate-700 mb-1.5">目前密碼</label>
+            <input id="current-pw-input" type="password" required
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label for="new-pw-input" class="block text-xs font-semibold text-slate-700 mb-1.5">新密碼（至少 6 個字元）</label>
+            <input id="new-pw-input" type="password" required minlength="6"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label for="confirm-pw-input" class="block text-xs font-semibold text-slate-700 mb-1.5">確認新密碼</label>
+            <input id="confirm-pw-input" type="password" required minlength="6"
+              class="w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <button type="submit"
+            class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-2xs transition">
+            儲存新密碼
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
+
+  <!-- 建立新房間 Modal -->
+  <div id="create-room-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-extrabold text-slate-900">建立私人房間</h3>
+        <button id="close-create-room-modal-btn" type="button" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+      </div>
+
+      <form id="create-room-form" class="space-y-4">
+        <div>
+          <label for="room-name-input" class="block text-xs font-semibold text-slate-700 mb-1">房間名稱</label>
+          <input id="room-name-input" type="text" required placeholder="例如：專案討論時間統計"
+            class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div>
+          <label for="room-desc-input" class="block text-xs font-semibold text-slate-700 mb-1">說明（選填）</label>
+          <input id="room-desc-input" type="text" placeholder="簡述統計目的或注意事項"
+            class="w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="room-start-date" class="block text-xs font-semibold text-slate-700 mb-1">開始日期</label>
+            <input id="room-start-date" type="date" required
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+          <div>
+            <label for="room-end-date" class="block text-xs font-semibold text-slate-700 mb-1">結束日期（最多 14 天）</label>
+            <input id="room-end-date" type="date" required
+              class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label for="room-day-start-hour" class="block text-xs font-semibold text-slate-700 mb-1">每日起始小時</label>
+            <select id="room-day-start-hour" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white"></select>
+          </div>
+          <div>
+            <label for="room-day-end-hour" class="block text-xs font-semibold text-slate-700 mb-1">每日結束小時</label>
+            <select id="room-day-end-hour" class="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm bg-white"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5">邀請受邀成員（僅受邀者可查看此私人房間）</label>
+          <div id="create-room-invite-list" class="max-h-40 overflow-y-auto border border-slate-200 rounded-2xl p-3 space-y-2 bg-slate-50/70"></div>
+        </div>
+
+        <button type="submit"
+          class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold shadow-2xs transition">
+          確認建立房間
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 管理受邀成員 Modal -->
+  <div id="manage-invite-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 max-w-md w-full p-6 shadow-xl space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-extrabold text-slate-900">管理房間受邀成員</h3>
+        <button id="close-invite-modal-btn" type="button" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+      </div>
+      <p class="text-xs text-slate-500">勾選或取消受邀用戶，儲存後立即生效。</p>
+      <div id="edit-room-invite-list" class="space-y-2 max-h-60 overflow-y-auto border border-slate-200 rounded-2xl p-3 bg-slate-50/70"></div>
+      <button id="save-room-invites-btn" type="button"
+        class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
+        儲存受邀名單
+      </button>
+    </div>
+  </div>
+
+  <!-- 非 5 分鐘單位點擊展開的 5 分鐘明細視窗 -->
+  <div id="bucket-five-min-breakdown-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/50 p-4">
+    <div class="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full p-6 shadow-xl space-y-4 max-h-[88vh] overflow-y-auto">
+      <div class="flex items-start justify-between gap-3">
+        <div>
+          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">5 分鐘單位明細</span>
+          <h3 id="breakdown-modal-title" class="text-lg font-extrabold text-slate-900 mt-1"></h3>
+          <p id="breakdown-modal-subtitle" class="text-xs text-slate-500 mt-0.5"></p>
+        </div>
+        <button id="close-breakdown-modal-btn" type="button" class="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+      </div>
+      <div id="breakdown-modal-body" class="space-y-2 text-xs"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      doc,
+      getDoc,
+      setDoc,
+      updateDoc,
+      onSnapshot,
+      collection
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    const ROOT_ADMIN_USERNAME = 'RP水草';
+    const ROOT_ADMIN_DEFAULT_PW = 'Man0607Hei';
+
+    const appId = typeof __app_id !== 'undefined' && __app_id ? __app_id : 'time-spot-app';
+
+    // 支援環境注入設定或退回本機記憶體模式（確保任何環境皆可完整運作與渲染 UI）
+    let db = null;
+    let auth = null;
+    let cloudEnabled = false;
+    let currentAuthUser = null;
+
+    // 本機備援儲存（當未提供 Firebase 設定或離線時使用）
+    const memoryStore = {
+      users: {},
+      rooms: {}
+    };
+
+    const state = {
+      usersMap: {}, // username -> userDoc
+      roomsMap: {}, // roomId -> roomDoc
+      currentUser: null, // 已登入的 userDoc
+      currentView: 'auth', // 'auth' | 'rooms' | 'room-detail' | 'admin' | 'password'
+      activeRoomId: null,
+      activeDate: null,
+      gridMode: 'edit', // 'edit' | 'overview' | 'admin'
+      adminBucketMinutes: 5, // 管理者在總覽與詳細分析的顯示單位（5 / 10 / 15 / 20 / 30 分鐘）
+      selectedSlotKey: null,
+      isDraggingPaint: false,
+      dragPaintValue: true,
+      unsubUsers: null,
+      unsubRooms: null
+    };
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(message, type = 'info') {
+      const banner = document.getElementById('toast-banner');
+      const inner = document.getElementById('toast-inner');
+      const msgEl = document.getElementById('toast-message');
+      msgEl.textContent = message;
+
+      inner.className =
+        'pointer-events-auto rounded-2xl shadow-lg border px-4 py-3 text-sm font-medium flex items-center justify-between gap-3 ' +
+        (type === 'error'
+          ? 'bg-rose-950 text-rose-100 border-rose-800'
+          : type === 'success'
+            ? 'bg-emerald-950 text-emerald-100 border-emerald-800'
+            : 'bg-slate-900 text-white border-slate-800');
+
+      banner.classList.remove('hidden');
+      clearTimeout(showToast._timer);
+      showToast._timer = setTimeout(() => {
+        banner.classList.add('hidden');
+      }, 3600);
+    }
+
+    function isRootAdmin(user) {
+      return Boolean(user && user.username === ROOT_ADMIN_USERNAME);
+    }
+
+    function isAdminUser(user) {
+      if (!user) return false;
+      return user.username === ROOT_ADMIN_USERNAME || user.role === 'admin';
+    }
+
+    function generateRandomPassword(length = 12) {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%^&*';
+      const arr = new Uint32Array(length);
+      crypto.getRandomValues(arr);
+      let out = '';
+      for (let i = 0; i < length; i++) {
+        out += chars[arr[i] % chars.length];
+      }
+      return out;
+    }
+
+    function minutesToTimeStr(mins) {
+      const h = Math.floor(mins / 60);
+      const m = mins % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+    }
+
+    function timeStrToMinutes(str) {
+      if (!str || !str.includes(':')) return null;
+      const [hStr, mStr] = str.split(':');
+      const h = parseInt(hStr, 10);
+      const m = parseInt(mStr, 10);
+      if (Number.isNaN(h) || Number.isNaN(m)) return null;
+      return h * 60 + m;
+    }
+
+    function enumerateDates(startDateStr, endDateStr, maxDays = 14) {
+      const start = new Date(startDateStr + 'T00:00:00');
+      const end = new Date(endDateStr + 'T00:00:00');
+      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return [];
+      const dates = [];
+      const cur = new Date(start);
+      while (cur <= end && dates.length < maxDays) {
+        const y = cur.getFullYear();
+        const m = String(cur.getMonth() + 1).padStart(2, '0');
+        const d = String(cur.getDate()).padStart(2, '0');
+        dates.push(`${y}-${m}-${d}`);
+        cur.setDate(cur.getDate() + 1);
+      }
+      return dates;
+    }
+
+    function getRoomSlotMinutesList(room) {
+      const startH = typeof room.dayStartHour === 'number' ? room.dayStartHour : 9;
+      const endH = typeof room.dayEndHour === 'number' ? room.dayEndHour : 21;
+      const startMins = startH * 60;
+      const endMins = Math.max(startMins + 60, endH * 60);
+      const slots = [];
+      for (let m = startMins; m < endMins; m += 5) {
+        slots.push(m);
+      }
+      return slots;
+    }
+
+    function getUserFreeSetForDate(room, username, dateStr) {
+      const avail = room.availability || {};
+      const byUser = avail[username] || {};
+      const arr = Array.isArray(byUser[dateStr]) ? byUser[dateStr] : [];
+      return new Set(arr.map((n) => Number(n)).filter((n) => !Number.isNaN(n)));
+    }
+
+    async function saveUserDateSlots(room, username, dateStr, freeSet) {
+      const sorted = Array.from(freeSet).sort((a, b) => a - b);
+      const nextAvail = { ...(room.availability || {}) };
+      const nextUserAvail = { ...(nextAvail[username] || {}) };
+      nextUserAvail[dateStr] = sorted;
+      nextAvail[username] = nextUserAvail;
+      room.availability = nextAvail;
+
+      if (cloudEnabled && currentAuthUser) {
+        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', room.id);
+        await updateDoc(roomRef, {
+          [`availability.${username}.${dateStr}`]: sorted
+        });
+      } else {
+        memoryStore.rooms[room.id] = { ...room };
+      }
+    }
+
+    async function upsertUserDoc(userDoc) {
+      state.usersMap[userDoc.username] = { ...userDoc };
+      if (cloudEnabled && currentAuthUser) {
+        const userRef = doc(db, 'artifacts', appId, 'public', 'data', 'users', encodeURIComponent(userDoc.username));
+        await setDoc(userRef, userDoc, { merge: true });
+      } else {
+        memoryStore.users[userDoc.username] = { ...userDoc };
+        renderAll();
+      }
+    }
+
+    async function upsertRoomDoc(roomDoc) {
+      state.roomsMap[roomDoc.id] = { ...roomDoc };
+      if (cloudEnabled && currentAuthUser) {
+        const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomDoc.id);
+        await setDoc(roomRef, roomDoc, { merge: true });
+      } else {
+        memoryStore.rooms[roomDoc.id] = { ...roomDoc };
+        renderAll();
+      }
+    }
+
+    async function ensureSeedRootAdmin() {
+      const seedDoc = {
+        username: ROOT_ADMIN_USERNAME,
+        password: ROOT_ADMIN_DEFAULT_PW,
+        role: 'admin',
+        createdAt: Date.now()
+      };
+
+      if (cloudEnabled && currentAuthUser) {
+        const ref = doc(db, 'artifacts', appId, 'public', 'data', 'users', encodeURIComponent(ROOT_ADMIN_USERNAME));
+        const snap = await getDoc(ref);
+        if (!snap.exists()) {
+          await setDoc(ref, seedDoc);
+        }
+      } else if (!memoryStore.users[ROOT_ADMIN_USERNAME]) {
+        memoryStore.users[ROOT_ADMIN_USERNAME] = seedDoc;
+      }
+    }
+
+    function startSubscriptions() {
+      if (state.unsubUsers) state.unsubUsers();
+      if (state.unsubRooms) state.unsubRooms();
+
+      if (cloudEnabled && currentAuthUser) {
+        const usersCol = collection(db, 'artifacts', appId, 'public', 'data', 'users');
+        state.unsubUsers = onSnapshot(
+          usersCol,
+          (snap) => {
+            const map = {};
+            snap.forEach((d) => {
+              const data = d.data();
+              if (data && data.username) map[data.username] = data;
+            });
+            state.usersMap = map;
+            syncCurrentUserFromMap();
+            renderAll();
+          },
+          () => {
+            document.getElementById('sync-status-text').textContent = '同步重試中';
+          }
+        );
+
+        const roomsCol = collection(db, 'artifacts', appId, 'public', 'data', 'rooms');
+        state.unsubRooms = onSnapshot(
+          roomsCol,
+          (snap) => {
+            const map = {};
+            snap.forEach((d) => {
+              const data = d.data();
+              if (data && data.id) map[data.id] = data;
+            });
+            state.roomsMap = map;
+            renderAll();
+          },
+          () => {
+            document.getElementById('sync-status-text').textContent = '同步重試中';
+          }
+        );
+      } else {
+        state.usersMap = { ...memoryStore.users };
+        state.roomsMap = { ...memoryStore.rooms };
+        syncCurrentUserFromMap();
+        renderAll();
+      }
+    }
+
+    function syncCurrentUserFromMap() {
+      if (!state.currentUser) return;
+      const latest = state.usersMap[state.currentUser.username];
+      if (latest) {
+        state.currentUser = latest;
+      }
+    }
+
+    function setView(viewName) {
+      state.currentView = viewName;
+      renderAll();
+    }
+
+    function renderAll() {
+      const header = document.getElementById('app-header');
+      const authView = document.getElementById('auth-view');
+      const roomsView = document.getElementById('rooms-view');
+      const roomDetailView = document.getElementById('room-detail-view');
+      const adminConsoleView = document.getElementById('admin-console-view');
+      const passwordView = document.getElementById('password-view');
+
+      if (!state.currentUser) {
+        header.classList.add('hidden');
+        authView.classList.remove('hidden');
+        roomsView.classList.add('hidden');
+        roomDetailView.classList.add('hidden');
+        adminConsoleView.classList.add('hidden');
+        passwordView.classList.add('hidden');
+        return;
+      }
+
+      header.classList.remove('hidden');
+      authView.classList.add('hidden');
+
+      const admin = isAdminUser(state.currentUser);
+      document.getElementById('current-user-name').textContent = state.currentUser.username;
+      const roleBadge = document.getElementById('current-user-role-badge');
+      roleBadge.textContent = admin ? '管理者' : '普通用戶';
+      roleBadge.className = admin
+        ? 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900'
+        : 'text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-100 text-slate-700';
+
+      document.getElementById('nav-admin-btn').classList.toggle('hidden', !admin);
+      document.getElementById('mnav-admin-btn').classList.toggle('hidden', !admin);
+      document.getElementById('sync-status-text').textContent = cloudEnabled ? '雲端即時同步' : '本機階段模式';
+
+      if (!admin && state.currentView === 'admin') {
+        state.currentView = 'rooms';
+      }
+
+      roomsView.classList.toggle('hidden', state.currentView !== 'rooms');
+      roomDetailView.classList.toggle('hidden', state.currentView !== 'room-detail');
+      adminConsoleView.classList.toggle('hidden', state.currentView !== 'admin');
+      passwordView.classList.toggle('hidden', state.currentView !== 'password');
+
+      if (state.currentView === 'rooms') {
+        renderRoomsListView();
+      } else if (state.currentView === 'room-detail') {
+        renderActiveRoomView();
+      } else if (state.currentView === 'admin') {
+        renderAdminConsoleView();
+      }
+    }
+
+    function getInvitedRoomsForCurrentUser() {
+      if (!state.currentUser) return [];
+      const uname = state.currentUser.username;
+      return Object.values(state.roomsMap)
+        .filter((r) => Array.isArray(r.invitedUsers) && r.invitedUsers.includes(uname))
+        .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+
+    function renderRoomsListView() {
+      const admin = isAdminUser(state.currentUser);
+      const createBtn = document.getElementById('open-create-room-modal-btn');
+      createBtn.classList.toggle('hidden', !admin);
+      createBtn.classList.toggle('inline-flex', admin);
+
+      const rooms = getInvitedRoomsForCurrentUser();
+      const grid = document.getElementById('invited-rooms-grid');
+      const emptyState = document.getElementById('empty-rooms-state');
+      const emptyHint = document.getElementById('empty-rooms-hint');
+
+      grid.innerHTML = '';
+      if (rooms.length === 0) {
+        emptyState.classList.remove('hidden');
+        emptyHint.textContent = admin
+          ? '您目前尚未建立或受邀任何房間，點擊右上角「建立新房間」即可開始。'
+          : '您目前尚未受邀任何私人房間，請請管理者將您的帳號加入房間邀請名單。';
+        return;
+      }
+
+      emptyState.classList.add('hidden');
+      rooms.forEach((room) => {
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-3xl border border-slate-200 hover:border-indigo-300 p-5 shadow-2xs flex flex-col justify-between gap-4 transition';
+
+        const invitedCount = Array.isArray(room.invitedUsers) ? room.invitedUsers.length : 0;
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700">私人房間</span>
+              <span class="text-xs text-slate-400">建立者：${escapeHtml(room.createdBy || '')}</span>
+            </div>
+            <h3 class="text-lg font-extrabold text-slate-900">${escapeHtml(room.name)}</h3>
+            <p class="text-xs text-slate-500 line-clamp-2">${escapeHtml(room.description || '無額外說明')}</p>
+            <div class="pt-2 text-xs text-slate-600 space-y-1">
+              <div>日期範圍：<span class="font-semibold">${escapeHtml(room.startDate)} ～ ${escapeHtml(room.endDate)}</span></div>
+              <div>每日時段：<span class="font-semibold">${String(room.dayStartHour).padStart(2, '0')}:00 ～ ${String(room.dayEndHour).padStart(2, '0')}:00</span></div>
+              <div>受邀人數：<span class="font-semibold">${invitedCount} 人</span></div>
+            </div>
+          </div>
+          <button type="button" data-room-id="${escapeHtml(room.id)}"
+            class="enter-room-btn w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold transition">
+            進入房間填寫 / 查看
+          </button>
+        `;
+        grid.appendChild(card);
+      });
+
+      grid.querySelectorAll('.enter-room-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const rid = btn.getAttribute('data-room-id');
+          openRoomDetail(rid);
+        });
+      });
+    }
+
+    function openRoomDetail(roomId) {
+      const room = state.roomsMap[roomId];
+      if (!room) {
+        showToast('找不到該房間', 'error');
+        return;
+      }
+      const invited = Array.isArray(room.invitedUsers) && room.invitedUsers.includes(state.currentUser.username);
+      if (!invited) {
+        showToast('此為私人房間，您未被邀請查看', 'error');
+        return;
+      }
+
+      state.activeRoomId = roomId;
+      const dates = enumerateDates(room.startDate, room.endDate);
+      state.activeDate = dates.includes(state.activeDate) ? state.activeDate : (dates[0] || null);
+      state.gridMode = 'edit';
+      state.selectedSlotKey = null;
+      setView('room-detail');
+    }
+
+    function renderActiveRoomView() {
+      const room = state.roomsMap[state.activeRoomId];
+      if (!room || !Array.isArray(room.invitedUsers) || !room.invitedUsers.includes(state.currentUser.username)) {
+        state.activeRoomId = null;
+        setView('rooms');
+        return;
+      }
+
+      const admin = isAdminUser(state.currentUser);
+      document.getElementById('detail-room-title').textContent = room.name;
+      document.getElementById('detail-room-desc').textContent = room.description || '無額外說明';
+      document.getElementById('detail-room-period').textContent = `日期：${room.startDate} ～ ${room.endDate}`;
+      document.getElementById('detail-room-hours').textContent = `每日 ${String(room.dayStartHour).padStart(2, '0')}:00 - ${String(room.dayEndHour).padStart(2, '0')}:00`;
+      document.getElementById('detail-invited-count').textContent = String(room.invitedUsers.length);
+
+      const badgesWrap = document.getElementById('detail-invited-badges');
+      badgesWrap.innerHTML = room.invitedUsers
+        .map((u) => `<span class="px-2.5 py-0.5 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700">${escapeHtml(u)}</span>`)
+        .join('');
+
+      document.getElementById('room-admin-quick-actions').classList.toggle('hidden', !admin);
+      document.getElementById('mode-admin-detail-btn').classList.toggle('hidden', !admin);
+
+      // 管理者專屬：總覽與詳細分析的顯示單位選擇器（5 / 10 / 15 / 20 / 30 分鐘）
+      const unitWrap = document.getElementById('admin-unit-selector-wrap');
+      const unitSelect = document.getElementById('admin-bucket-unit-select');
+      if (admin && (state.gridMode === 'overview' || state.gridMode === 'admin')) {
+        unitWrap.classList.remove('hidden');
+        unitWrap.classList.add('flex');
+        unitSelect.value = String(state.adminBucketMinutes);
+      } else {
+        unitWrap.classList.add('hidden');
+        unitWrap.classList.remove('flex');
+      }
+
+      if (!admin) {
+        state.adminBucketMinutes = 5;
+        if (state.gridMode === 'admin') state.gridMode = 'overview';
+      }
+
+      // 模式按鈕樣式
+      const editBtn = document.getElementById('mode-my-edit-btn');
+      const ovBtn = document.getElementById('mode-overview-btn');
+      const admBtn = document.getElementById('mode-admin-detail-btn');
+
+      editBtn.className = state.gridMode === 'edit'
+        ? 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 text-white transition'
+        : 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+
+      ovBtn.className = state.gridMode === 'overview'
+        ? 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-indigo-600 text-white transition'
+        : 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition';
+
+      admBtn.className = state.gridMode === 'admin'
+        ? 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-amber-600 text-white transition'
+        : 'px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-amber-100 text-amber-900 hover:bg-amber-200 transition';
+
+      document.getElementById('bulk-range-card').classList.toggle('hidden', state.gridMode !== 'edit');
+      document.getElementById('admin-analytics-panel').classList.toggle('hidden', !(admin && state.gridMode === 'admin'));
+
+      const hintEl = document.getElementById('grid-interaction-hint');
+      if (state.gridMode === 'edit') {
+        hintEl.textContent = '點擊或按住拖曳塗抹即可切換 5 分鐘有空狀態。';
+      } else if (admin && state.adminBucketMinutes !== 5) {
+        hintEl.textContent = `目前以 ${state.adminBucketMinutes} 分鐘為顯示單位；點擊任一區塊可查看各 5 分鐘刻度的有空時間明細。`;
+      } else {
+        hintEl.textContent = '顯示各時段有空人數；點擊區塊可查看詳細人員。';
+      }
+
+      // 日期分頁與一鍵長時段日期選單
+      const dates = enumerateDates(room.startDate, room.endDate);
+      if (!dates.includes(state.activeDate)) {
+        state.activeDate = dates[0] || null;
+      }
+
+      const dateTabsBar = document.getElementById('date-tabs-bar');
+      const bulkDateSelect = document.getElementById('bulk-date-select');
+      dateTabsBar.innerHTML = '';
+      bulkDateSelect.innerHTML = '';
+
+      dates.forEach((dStr) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        const active = dStr === state.activeDate;
+        tab.className = active
+          ? 'px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 text-white whitespace-nowrap'
+          : 'px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 whitespace-nowrap';
+        tab.textContent = dStr;
+        tab.addEventListener('click', () => {
+          state.activeDate = dStr;
+          state.selectedSlotKey = null;
+          renderActiveRoomView();
+        });
+        dateTabsBar.appendChild(tab);
+
+        const opt = document.createElement('option');
+        opt.value = dStr;
+        opt.textContent = dStr;
+        if (dStr === state.activeDate) opt.selected = true;
+        bulkDateSelect.appendChild(opt);
+      });
+
+      renderTimelineGrid(room, state.activeDate);
+      if (admin && state.gridMode === 'admin') {
+        renderAdminRoomAnalytics(room, state.activeDate);
+      }
+    }
+
+    function renderTimelineGrid(room, dateStr) {
+      const container = document.getElementById('timeline-grid-container');
+      container.innerHTML = '';
+      if (!dateStr) return;
+
+      const slots = getRoomSlotMinutesList(room);
+      const invitedUsers = Array.isArray(room.invitedUsers) ? room.invitedUsers : [];
+      const myFreeSet = getUserFreeSetForDate(room, state.currentUser.username, dateStr);
+
+      // 普通用戶固定以 5 分鐘為單位；管理者在總覽或詳細分析模式下可使用 5/10/15/20/30 分鐘
+      const admin = isAdminUser(state.currentUser);
+      const isAdminViewingAnalytics = admin && (state.gridMode === 'overview' || state.gridMode === 'admin');
+      const unitMinutes = state.gridMode === 'edit' ? 5 : (isAdminViewingAnalytics ? state.adminBucketMinutes : 5);
+
+      const memberFreeSets = {};
+      invitedUsers.forEach((u) => {
+        memberFreeSets[u] = getUserFreeSetForDate(room, u, dateStr);
+      });
+
+      const hoursMap = new Map();
+      slots.forEach((m) => {
+        const h = Math.floor(m / 60);
+        if (!hoursMap.has(h)) hoursMap.set(h, []);
+        hoursMap.get(h).push(m);
+      });
+
+      const tableWrap = document.createElement('div');
+      tableWrap.className = 'divide-y divide-slate-200 bg-white min-w-[540px]';
+
+      const colsPerHour = Math.max(1, Math.round(60 / unitMinutes));
+      const headerRow = document.createElement('div');
+      headerRow.className = 'grid grid-cols-[84px_1fr] bg-slate-50 text-[11px] font-semibold text-slate-500 border-b border-slate-200';
+      const cornerCell = document.createElement('div');
+      cornerCell.className = 'p-2 text-center border-r border-slate-200';
+      cornerCell.textContent = `時段 (${unitMinutes}m)`;
+
+      const subHeaderGrid = document.createElement('div');
+      subHeaderGrid.className = 'grid';
+      subHeaderGrid.style.gridTemplateColumns = `repeat(${colsPerHour}, minmax(0, 1fr))`;
+      for (let i = 0; i < colsPerHour; i++) {
+        const minLabel = document.createElement('div');
+        minLabel.className = 'py-1.5 text-center border-r last:border-r-0 border-slate-200/70';
+        minLabel.textContent = `:${String(i * unitMinutes).padStart(2, '0')}`;
+        subHeaderGrid.appendChild(minLabel);
+      }
+      headerRow.appendChild(cornerCell);
+      headerRow.appendChild(subHeaderGrid);
+      tableWrap.appendChild(headerRow);
+
+      hoursMap.forEach((hourSlots, hour) => {
+        const row = document.createElement('div');
+        row.className = 'grid grid-cols-[84px_1fr] items-stretch';
+
+        const hourLabel = document.createElement('div');
+        hourLabel.className = 'px-2 py-2 text-xs font-bold text-slate-700 bg-slate-50/70 border-r border-slate-200 flex items-center justify-center';
+        hourLabel.textContent = `${String(hour).padStart(2, '0')}:00`;
+
+        const cellsGrid = document.createElement('div');
+        cellsGrid.className = 'grid h-11';
+        cellsGrid.style.gridTemplateColumns = `repeat(${colsPerHour}, minmax(0, 1fr))`;
+
+        const segments = [];
+        for (let idx = 0; idx < hourSlots.length; ) {
+          const baseMins = hourSlots[idx];
+          const group = [];
+          while (idx < hourSlots.length && hourSlots[idx] < baseMins + unitMinutes) {
+            group.push(hourSlots[idx]);
+            idx++;
+          }
+          segments.push({ startMins: baseMins, subFiveMinSlots: group });
+        }
+
+        segments.forEach(({ startMins, subFiveMinSlots }) => {
+          const endMins = startMins + unitMinutes;
+          const anyFreeUsersHere = invitedUsers.filter((u) =>
+            subFiveMinSlots.some((m5) => memberFreeSets[u]?.has(m5))
+          );
+          const freeCount = anyFreeUsersHere.length;
+          const totalInvited = Math.max(1, invitedUsers.length);
+          const iAmFree = subFiveMinSlots.some((m5) => myFreeSet.has(m5));
+          const slotKey = `${dateStr}|${startMins}|${unitMinutes}`;
+          const isSelected = state.selectedSlotKey === slotKey;
+
+          const cell = document.createElement('div');
+          let bgClass = 'bg-white hover:bg-slate-100';
+
+          if (state.gridMode === 'edit') {
+            bgClass = iAmFree
+              ? 'bg-emerald-500 hover:bg-emerald-600'
+              : 'bg-white hover:bg-emerald-50';
+          } else {
+            if (freeCount === 0) {
+              bgClass = 'bg-slate-50 hover:bg-slate-100';
+            } else if (freeCount === totalInvited && totalInvited > 1) {
+              bgClass = 'bg-emerald-600 hover:bg-emerald-700';
+            } else {
+              const ratio = freeCount / totalInvited;
+              bgClass = ratio >= 0.5 ? 'bg-emerald-400 hover:bg-emerald-500' : 'bg-emerald-200 hover:bg-emerald-300';
+            }
+          }
+
+          const ringClass = isSelected ? 'ring-2 ring-inset ring-amber-500 z-10' : '';
+
+          cell.className = `slot-cell border-r last:border-r-0 border-slate-200/80 ${bgClass} ${ringClass} flex items-center justify-center text-[10px] font-bold cursor-pointer`;
+          cell.title = `${dateStr} ${minutesToTimeStr(startMins)}～${minutesToTimeStr(endMins)}｜有空（${freeCount}/${invitedUsers.length}）：${anyFreeUsersHere.join('、') || '無'}`;
+
+          if (state.gridMode !== 'edit' && freeCount > 0) {
+            cell.innerHTML = `<span class="${freeCount >= totalInvited && totalInvited > 1 ? 'text-white' : 'text-slate-900'}">${freeCount}</span>`;
+          }
+
+          cell.addEventListener('pointerdown', async (e) => {
+            e.preventDefault();
+            state.selectedSlotKey = slotKey;
+
+            if (state.gridMode === 'edit') {
+              const nextVal = !myFreeSet.has(startMins);
+              state.isDraggingPaint = true;
+              state.dragPaintValue = nextVal;
+              if (nextVal) myFreeSet.add(startMins);
+              else myFreeSet.delete(startMins);
+
+              await saveUserDateSlots(room, state.currentUser.username, dateStr, myFreeSet);
+              renderTimelineGrid(room, dateStr);
+              if (admin && state.gridMode === 'admin') {
+                renderAdminRoomAnalytics(room, dateStr);
+              }
+            } else {
+              renderTimelineGrid(room, dateStr);
+              if (admin && state.gridMode === 'admin') {
+                renderSelectedSlotDetailForAdmin(room, dateStr, startMins, subFiveMinSlots);
+              }
+              if (unitMinutes !== 5) {
+                openFiveMinuteBreakdownModal(room, dateStr, startMins, endMins, subFiveMinSlots);
+              } else if (freeCount > 0) {
+                showToast(`${minutesToTimeStr(startMins)} 有空：${anyFreeUsersHere.join('、')}`, 'info');
+              }
+            }
+          });
+
+          cell.addEventListener('pointerenter', async () => {
+            if (!state.isDraggingPaint || state.gridMode !== 'edit') return;
+            const currentlyFree = myFreeSet.has(startMins);
+            if (currentlyFree !== state.dragPaintValue) {
+              if (state.dragPaintValue) myFreeSet.add(startMins);
+              else myFreeSet.delete(startMins);
+              await saveUserDateSlots(room, state.currentUser.username, dateStr, myFreeSet);
+              renderTimelineGrid(room, dateStr);
+            }
+          });
+
+          cellsGrid.appendChild(cell);
+        });
+
+        row.appendChild(hourLabel);
+        row.appendChild(cellsGrid);
+        tableWrap.appendChild(row);
+      });
+
+      container.appendChild(tableWrap);
+    }
+
+    function openFiveMinuteBreakdownModal(room, dateStr, startMins, endMins, subFiveMinSlots) {
+      const invitedUsers = Array.isArray(room.invitedUsers) ? room.invitedUsers : [];
+      const modal = document.getElementById('bucket-five-min-breakdown-modal');
+      document.getElementById('breakdown-modal-title').textContent =
+        `${dateStr} ${minutesToTimeStr(startMins)} ～ ${minutesToTimeStr(endMins)}（5 分鐘刻度明細）`;
+      document.getElementById('breakdown-modal-subtitle').textContent =
+        `目前合併顯示單位：${endMins - startMins} 分鐘，以下為每個 5 分鐘小格的精確有空人員`;
+
+      const bodyEl = document.getElementById('breakdown-modal-body');
+      bodyEl.innerHTML = '';
+
+      subFiveMinSlots.forEach((m5) => {
+        const freeUsers = invitedUsers.filter((u) => getUserFreeSetForDate(room, u, dateStr).has(m5));
+        const row = document.createElement('div');
+        row.className = 'flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 p-3 rounded-xl border border-slate-200 bg-slate-50/80';
+        row.innerHTML = `
+          <span class="font-mono font-bold text-slate-900">${minutesToTimeStr(m5)} ～ ${minutesToTimeStr(m5 + 5)}</span>
+          <span class="${freeUsers.length > 0 ? 'text-emerald-700 font-semibold' : 'text-slate-400'}">
+            ${freeUsers.length > 0 ? `有空（${freeUsers.length}）：${escapeHtml(freeUsers.join('、'))}` : '無人有空'}
+          </span>
+        `;
+        bodyEl.appendChild(row);
+      });
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function slotsToRangesText(sortedMinutes) {
+      if (!sortedMinutes.length) return '無';
+      const ranges = [];
+      let start = sortedMinutes[0];
+      let prev = sortedMinutes[0];
+      for (let i = 1; i < sortedMinutes.length; i++) {
+        const cur = sortedMinutes[i];
+        if (cur === prev + 5) {
+          prev = cur;
+        } else {
+          ranges.push(`${minutesToTimeStr(start)}～${minutesToTimeStr(prev + 5)}`);
+          start = cur;
+          prev = cur;
+        }
+      }
+      ranges.push(`${minutesToTimeStr(start)}～${minutesToTimeStr(prev + 5)}`);
+      return ranges.join('、');
+    }
+
+    function renderAdminRoomAnalytics(room, dateStr) {
+      if (!dateStr) return;
+      const invitedUsers = Array.isArray(room.invitedUsers) ? room.invitedUsers : [];
+      const slots = getRoomSlotMinutesList(room);
+      const statsGrid = document.getElementById('admin-member-stats-grid');
+      statsGrid.innerHTML = '';
+
+      invitedUsers.forEach((u) => {
+        const set = getUserFreeSetForDate(room, u, dateStr);
+        const sorted = Array.from(set).sort((a, b) => a - b);
+        const totalMins = sorted.length * 5;
+        const card = document.createElement('div');
+        card.className = 'bg-white rounded-2xl border border-amber-200/80 p-3.5 space-y-1';
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-bold text-slate-900">${escapeHtml(u)}</span>
+            <span class="text-xs font-semibold text-emerald-700">${(totalMins / 60).toFixed(1)} 小時（${totalMins} 分）</span>
+          </div>
+          <div class="text-xs text-slate-600 break-words">${escapeHtml(slotsToRangesText(sorted))}</div>
+        `;
+        statsGrid.appendChild(card);
+      });
+
+      // 全員皆有空的時段（以 5 分鐘為基準）
+      const allFreeMins = slots.filter((m5) =>
+        invitedUsers.length > 0 && invitedUsers.every((u) => getUserFreeSetForDate(room, u, dateStr).has(m5))
+      );
+      const allFreeBox = document.getElementById('admin-all-free-ranges');
+      allFreeBox.innerHTML = allFreeMins.length
+        ? `<div class="font-semibold text-emerald-800">${escapeHtml(slotsToRangesText(allFreeMins))}</div>`
+        : `<div class="text-slate-400">此日期尚無全員同時有空的時段</div>`;
+
+      if (state.selectedSlotKey) {
+        const parts = state.selectedSlotKey.split('|');
+        const dStr = parts[0];
+        const startM = parseInt(parts[1], 10);
+        const unit = parseInt(parts[2] || String(state.adminBucketMinutes), 10) || 5;
+        if (!Number.isNaN(startM)) {
+          const subSlots = [];
+          for (let m = startM; m < startM + unit; m += 5) subSlots.push(m);
+          renderSelectedSlotDetailForAdmin(room, dStr, startM, subSlots);
+        }
+      }
+    }
+
+    function renderSelectedSlotDetailForAdmin(room, dateStr, startMins, subFiveMinSlots = null) {
+      const box = document.getElementById('admin-selected-slot-detail');
+      const invitedUsers = Array.isArray(room.invitedUsers) ? room.invitedUsers : [];
+      const slotsToCheck = Array.isArray(subFiveMinSlots) && subFiveMinSlots.length > 0 ? subFiveMinSlots : [startMins];
+      const endMins = slotsToCheck[slotsToCheck.length - 1] + 5;
+
+      const rowsHtml = slotsToCheck
+        .map((m5) => {
+          const freeAt5 = invitedUsers.filter((u) => getUserFreeSetForDate(room, u, dateStr).has(m5));
+          return `
+            <div class="flex items-center justify-between gap-2 py-1 px-2 rounded bg-slate-50 border border-slate-100">
+              <span class="font-mono font-semibold text-slate-800">${minutesToTimeStr(m5)}～${minutesToTimeStr(m5 + 5)}</span>
+              <span class="${freeAt5.length > 0 ? 'text-emerald-700 font-medium' : 'text-slate-400'}">${escapeHtml(freeAt5.join('、') || '無人有空')}</span>
+            </div>
+          `;
+        })
+        .join('');
+
+      box.innerHTML = `
+        <div class="font-bold text-slate-900 mb-1.5">${escapeHtml(dateStr)} ${minutesToTimeStr(startMins)} ～ ${minutesToTimeStr(endMins)}（5 分鐘逐格明細）</div>
+        <div class="space-y-1 max-h-36 overflow-y-auto">${rowsHtml}</div>
+      `;
+    }
+
+    function renderAdminConsoleView() {
+      if (!isAdminUser(state.currentUser)) return;
+      const allUsers = Object.values(state.usersMap).sort((a, b) => {
+        if (a.username === ROOT_ADMIN_USERNAME) return -1;
+        if (b.username === ROOT_ADMIN_USERNAME) return 1;
+        return a.username.localeCompare(b.username, 'zh-Hant');
+      });
+
+      document.getElementById('admin-total-users-count').textContent = String(allUsers.length);
+      const listEl = document.getElementById('admin-users-list');
+      listEl.innerHTML = '';
+
+      const canAssignAdmin = isRootAdmin(state.currentUser);
+
+      allUsers.forEach((u) => {
+        const isRoot = u.username === ROOT_ADMIN_USERNAME;
+        const isAdm = u.username === ROOT_ADMIN_USERNAME || u.role === 'admin';
+
+        const row = document.createElement('div');
+        row.className = 'rounded-2xl border border-slate-200 p-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 bg-slate-50/50';
+
+        row.innerHTML = `
+          <div class="space-y-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-sm font-extrabold text-slate-900">${escapeHtml(u.username)}</span>
+              <span class="text-[11px] px-2.5 py-0.5 rounded-full font-semibold ${isAdm ? 'bg-amber-100 text-amber-900' : 'bg-slate-200/80 text-slate-700'}">
+                ${isAdm ? '管理者' : '普通用戶'}
+              </span>
+            </div>
+            <div class="text-xs text-slate-600">
+              目前密碼：<span class="font-mono font-bold text-slate-900 bg-white px-2 py-0.5 rounded border border-slate-200">${escapeHtml(u.password || '')}</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" data-rand-user="${escapeHtml(u.username)}"
+              class="rand-pw-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-amber-100 hover:bg-amber-200 text-amber-950 transition">
+              生成隨機密碼
+            </button>
+            <button type="button" data-set-user="${escapeHtml(u.username)}"
+              class="set-pw-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-white hover:bg-slate-100 text-slate-800 border border-slate-300 transition">
+              自訂新密碼
+            </button>
+            ${
+              canAssignAdmin && !isRoot
+                ? `<button type="button" data-toggle-admin="${escapeHtml(u.username)}"
+                    class="toggle-admin-btn px-3 py-1.5 rounded-xl text-xs font-semibold ${isAdm ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'} transition">
+                    ${isAdm ? '撤銷管理者' : '任命為管理者'}
+                  </button>`
+                : ''
+            }
+          </div>
+        `;
+        listEl.appendChild(row);
+      });
+
+      listEl.querySelectorAll('.rand-pw-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const targetName = btn.getAttribute('data-rand-user');
+          const targetUser = state.usersMap[targetName];
+          if (!targetUser) return;
+          const nextPw = generateRandomPassword(12);
+          await upsertUserDoc({ ...targetUser, password: nextPw });
+          showToast(`已為「${targetName}」生成新隨機密碼：${nextPw}`, 'success');
+        });
+      });
+
+      listEl.querySelectorAll('.set-pw-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const targetName = btn.getAttribute('data-set-user');
+          const targetUser = state.usersMap[targetName];
+          if (!targetUser) return;
+          const customPw = prompt(`請輸入「${targetName}」的新密碼（至少 6 個字元）：`);
+          if (customPw === null) return;
+          const trimmed = customPw.trim();
+          if (trimmed.length < 6) {
+            showToast('密碼至少需要 6 個字元', 'error');
+            return;
+          }
+          await upsertUserDoc({ ...targetUser, password: trimmed });
+          showToast(`已更新「${targetName}」的密碼`, 'success');
+        });
+      });
+
+      listEl.querySelectorAll('.toggle-admin-btn').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          if (!isRootAdmin(state.currentUser)) return;
+          const targetName = btn.getAttribute('data-toggle-admin');
+          const targetUser = state.usersMap[targetName];
+          if (!targetUser || targetName === ROOT_ADMIN_USERNAME) return;
+          const nextRole = targetUser.role === 'admin' ? 'user' : 'admin';
+          await upsertUserDoc({ ...targetUser, role: nextRole });
+          showToast(
+            nextRole === 'admin' ? `已任命「${targetName}」為管理者` : `已將「${targetName}」設為普通用戶`,
+            'success'
+          );
+        });
+      });
+    }
+
+    function initHourSelects() {
+      const startSel = document.getElementById('room-day-start-hour');
+      const endSel = document.getElementById('room-day-end-hour');
+      startSel.innerHTML = '';
+      endSel.innerHTML = '';
+      for (let h = 0; h <= 23; h++) {
+        const opt1 = document.createElement('option');
+        opt1.value = String(h);
+        opt1.textContent = `${String(h).padStart(2, '0')}:00`;
+        if (h === 9) opt1.selected = true;
+        startSel.appendChild(opt1);
+
+        const opt2 = document.createElement('option');
+        opt2.value = String(h + 1);
+        opt2.textContent = `${String(h + 1).padStart(2, '0')}:00`;
+        if (h + 1 === 21) opt2.selected = true;
+        endSel.appendChild(opt2);
+      }
+    }
+
+    function populateCreateRoomInviteList() {
+      const wrap = document.getElementById('create-room-invite-list');
+      wrap.innerHTML = '';
+      const users = Object.keys(state.usersMap).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+      users.forEach((uname) => {
+        const checked = uname === state.currentUser.username;
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 text-xs font-medium text-slate-800 cursor-pointer';
+        label.innerHTML = `
+          <input type="checkbox" value="${escapeHtml(uname)}" ${checked ? 'checked' : ''} class="rounded border-slate-300 text-indigo-600" />
+          <span>${escapeHtml(uname)}</span>
+        `;
+        wrap.appendChild(label);
+      });
+    }
+
+    function openManageInviteModal() {
+      const room = state.roomsMap[state.activeRoomId];
+      if (!room || !isAdminUser(state.currentUser)) return;
+      const wrap = document.getElementById('edit-room-invite-list');
+      wrap.innerHTML = '';
+      const currentInvited = new Set(room.invitedUsers || []);
+      const users = Object.keys(state.usersMap).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+
+      users.forEach((uname) => {
+        const label = document.createElement('label');
+        label.className = 'flex items-center gap-2 text-xs font-medium text-slate-800 cursor-pointer';
+        label.innerHTML = `
+          <input type="checkbox" value="${escapeHtml(uname)}" ${currentInvited.has(uname) ? 'checked' : ''} class="rounded border-slate-300 text-indigo-600" />
+          <span>${escapeHtml(uname)}</span>
+        `;
+        wrap.appendChild(label);
+      });
+
+      const modal = document.getElementById('manage-invite-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function bindEvents() {
+      document.getElementById('toast-close-btn').addEventListener('click', () => {
+        document.getElementById('toast-banner').classList.add('hidden');
+      });
+
+      window.addEventListener('pointerup', () => {
+        state.isDraggingPaint = false;
+      });
+
+      // 登入 / 註冊分頁
+      const loginForm = document.getElementById('login-form');
+      const registerForm = document.getElementById('register-form');
+      const tabLoginBtn = document.getElementById('tab-login-btn');
+      const tabRegisterBtn = document.getElementById('tab-register-btn');
+
+      tabLoginBtn.addEventListener('click', () => {
+        loginForm.classList.remove('hidden');
+        registerForm.classList.add('hidden');
+        tabLoginBtn.className = 'py-2 rounded-xl text-sm font-semibold bg-white text-slate-900 shadow-2xs transition';
+        tabRegisterBtn.className = 'py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition';
+        document.getElementById('login-error').classList.add('hidden');
+      });
+
+      tabRegisterBtn.addEventListener('click', () => {
+        registerForm.classList.remove('hidden');
+        loginForm.classList.add('hidden');
+        tabRegisterBtn.className = 'py-2 rounded-xl text-sm font-semibold bg-white text-slate-900 shadow-2xs transition';
+        tabLoginBtn.className = 'py-2 rounded-xl text-sm font-semibold text-slate-600 hover:text-slate-900 transition';
+        document.getElementById('register-error').classList.add('hidden');
+      });
+
+      loginForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errBox = document.getElementById('login-error');
+        errBox.classList.add('hidden');
+
+        const username = document.getElementById('login-username').value.trim();
+        const password = document.getElementById('login-password').value;
+
+        await ensureSeedRootAdmin();
+        if (!cloudEnabled) {
+          state.usersMap = { ...state.usersMap, ...memoryStore.users };
+        }
+
+        const user = state.usersMap[username];
+        if (!user || user.password !== password) {
+          errBox.textContent = '用戶名稱或密碼錯誤，請重新確認。';
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        state.currentUser = user;
+        setView('rooms');
+        showToast(`歡迎回來，${user.username}`, 'success');
+      });
+
+      registerForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errBox = document.getElementById('register-error');
+        errBox.classList.add('hidden');
+
+        const username = document.getElementById('register-username').value.trim();
+        const password = document.getElementById('register-password').value;
+        const confirmPw = document.getElementById('register-password-confirm').value;
+
+        if (!username) {
+          errBox.textContent = '請輸入用戶名稱。';
+          errBox.classList.remove('hidden');
+          return;
+        }
+        if (password.length < 6) {
+          errBox.textContent = '密碼長度至少需要 6 個字元。';
+          errBox.classList.remove('hidden');
+          return;
+        }
+        if (password !== confirmPw) {
+          errBox.textContent = '兩次輸入的密碼不一致。';
+          errBox.classList.remove('hidden');
+          return;
+        }
+        if (state.usersMap[username]) {
+          errBox.textContent = '此用戶名稱已被使用，請更換名稱。';
+          errBox.classList.remove('hidden');
+          return;
+        }
+
+        const newUser = {
+          username,
+          password,
+          role: 'user',
+          createdAt: Date.now()
+        };
+        await upsertUserDoc(newUser);
+        state.currentUser = newUser;
+        registerForm.reset();
+        setView('rooms');
+        showToast(`帳號「${username}」已建立並登入`, 'success');
+      });
+
+      // 導覽列切換
+      document.getElementById('brand-home-btn').addEventListener('click', () => setView('rooms'));
+      document.getElementById('nav-rooms-btn').addEventListener('click', () => setView('rooms'));
+      document.getElementById('mnav-rooms-btn').addEventListener('click', () => setView('rooms'));
+
+      document.getElementById('nav-admin-btn').addEventListener('click', () => setView('admin'));
+      document.getElementById('mnav-admin-btn').addEventListener('click', () => setView('admin'));
+
+      document.getElementById('nav-password-btn').addEventListener('click', () => setView('password'));
+      document.getElementById('mnav-password-btn').addEventListener('click', () => setView('password'));
+
+      document.getElementById('logout-btn').addEventListener('click', () => {
+        state.currentUser = null;
+        state.activeRoomId = null;
+        setView('auth');
+      });
+
+      // 返回房間列表
+      document.getElementById('back-to-rooms-btn').addEventListener('click', () => setView('rooms'));
+
+      // 模式切換
+      document.getElementById('mode-my-edit-btn').addEventListener('click', () => {
+        state.gridMode = 'edit';
+        renderActiveRoomView();
+      });
+      document.getElementById('mode-overview-btn').addEventListener('click', () => {
+        state.gridMode = 'overview';
+        renderActiveRoomView();
+      });
+      document.getElementById('mode-admin-detail-btn').addEventListener('click', () => {
+        if (!isAdminUser(state.currentUser)) return;
+        state.gridMode = 'admin';
+        renderActiveRoomView();
+      });
+
+      // 管理者顯示單位切換（5 / 10 / 15 / 20 / 30 分鐘）
+      document.getElementById('admin-bucket-unit-select').addEventListener('change', (e) => {
+        if (!isAdminUser(state.currentUser)) return;
+        const val = parseInt(e.target.value, 10);
+        state.adminBucketMinutes = [5, 10, 15, 20, 30].includes(val) ? val : 5;
+        state.selectedSlotKey = null;
+        renderActiveRoomView();
+      });
+
+      // 關閉 5 分鐘明細視窗
+      const breakdownModal = document.getElementById('bucket-five-min-breakdown-modal');
+      const closeBreakdownModal = () => {
+        breakdownModal.classList.add('hidden');
+        breakdownModal.classList.remove('flex');
+      };
+      document.getElementById('close-breakdown-modal-btn').addEventListener('click', closeBreakdownModal);
+      breakdownModal.addEventListener('click', (e) => {
+        if (e.target === breakdownModal) closeBreakdownModal();
+      });
+
+      // 一鍵長時段有空
+      const applyBulkRange = async (isFree) => {
+        const room = state.roomsMap[state.activeRoomId];
+        if (!room) return;
+        const dStr = document.getElementById('bulk-date-select').value || state.activeDate;
+        const startM = timeStrToMinutes(document.getElementById('bulk-start-time').value);
+        const endM = timeStrToMinutes(document.getElementById('bulk-end-time').value);
+        if (startM === null || endM === null || endM <= startM) {
+          showToast('請選擇有效的開始與結束時間', 'error');
+          return;
+        }
+        const freeSet = getUserFreeSetForDate(room, state.currentUser.username, dStr);
+        for (let m = startM; m < endM; m += 5) {
+          if (isFree) freeSet.add(m);
+          else freeSet.delete(m);
+        }
+        await saveUserDateSlots(room, state.currentUser.username, dStr, freeSet);
+        state.activeDate = dStr;
+        renderActiveRoomView();
+        showToast(isFree ? '已一鍵標記該時段為有空' : '已一鍵取消該時段有空', 'success');
+      };
+
+      document.getElementById('bulk-apply-free-btn').addEventListener('click', () => applyBulkRange(true));
+      document.getElementById('bulk-remove-free-btn').addEventListener('click', () => applyBulkRange(false));
+
+      document.getElementById('clear-day-free-btn').addEventListener('click', async () => {
+        const room = state.roomsMap[state.activeRoomId];
+        if (!room || !state.activeDate) return;
+        await saveUserDateSlots(room, state.currentUser.username, state.activeDate, new Set());
+        renderActiveRoomView();
+        showToast('已清除當日全部有空時段', 'info');
+      });
+
+      // 複製管理者統計摘要
+      document.getElementById('copy-admin-summary-btn').addEventListener('click', () => {
+        const room = state.roomsMap[state.activeRoomId];
+        if (!room || !state.activeDate) return;
+        const invitedUsers = Array.isArray(room.invitedUsers) ? room.invitedUsers : [];
+        const lines = [`【${room.name}】${state.activeDate} 有空時間摘要`];
+        invitedUsers.forEach((u) => {
+          const sorted = Array.from(getUserFreeSetForDate(room, u, state.activeDate)).sort((a, b) => a - b);
+          lines.push(`- ${u}：${slotsToRangesText(sorted)}`);
+        });
+        const text = lines.join('\n');
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('已複製當日統計摘要', 'success');
+      });
+
+      // 建立房間 Modal
+      const createRoomModal = document.getElementById('create-room-modal');
+      document.getElementById('open-create-room-modal-btn').addEventListener('click', () => {
+        if (!isAdminUser(state.currentUser)) return;
+        const today = new Date();
+        const nextWeek = new Date(today);
+        nextWeek.setDate(today.getDate() + 6);
+        const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+        document.getElementById('room-start-date').value = fmt(today);
+        document.getElementById('room-end-date').value = fmt(nextWeek);
+        populateCreateRoomInviteList();
+        createRoomModal.classList.remove('hidden');
+        createRoomModal.classList.add('flex');
+      });
+
+      document.getElementById('close-create-room-modal-btn').addEventListener('click', () => {
+        createRoomModal.classList.add('hidden');
+        createRoomModal.classList.remove('flex');
+      });
+
+      document.getElementById('create-room-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!isAdminUser(state.currentUser)) return;
+
+        const name = document.getElementById('room-name-input').value.trim();
+        const description = document.getElementById('room-desc-input').value.trim();
+        const startDate = document.getElementById('room-start-date').value;
+        const endDate = document.getElementById('room-end-date').value;
+        const dayStartHour = parseInt(document.getElementById('room-day-start-hour').value, 10);
+        const dayEndHour = parseInt(document.getElementById('room-day-end-hour').value, 10);
+
+        if (endDate < startDate) {
+          showToast('結束日期不可早於開始日期', 'error');
+          return;
+        }
+        if (dayEndHour <= dayStartHour) {
+          showToast('每日結束小時需大於起始小時', 'error');
+          return;
+        }
+
+        const checked = Array.from(document.querySelectorAll('#create-room-invite-list input[type="checkbox"]:checked')).map(
+          (cb) => cb.value
+        );
+        if (!checked.includes(state.currentUser.username)) {
+          checked.unshift(state.currentUser.username);
+        }
+
+        const roomId = `room_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const newRoom = {
+          id: roomId,
+          name,
+          description,
+          startDate,
+          endDate,
+          dayStartHour,
+          dayEndHour,
+          invitedUsers: checked,
+          availability: {},
+          createdBy: state.currentUser.username,
+          createdAt: Date.now()
+        };
+
+        await upsertRoomDoc(newRoom);
+        createRoomModal.classList.add('hidden');
+        createRoomModal.classList.remove('flex');
+        document.getElementById('create-room-form').reset();
+        showToast(`已建立私人房間「${name}」`, 'success');
+      });
+
+      // 管理受邀成員 Modal
+      const inviteModal = document.getElementById('manage-invite-modal');
+      document.getElementById('open-invite-modal-btn').addEventListener('click', openManageInviteModal);
+      document.getElementById('close-invite-modal-btn').addEventListener('click', () => {
+        inviteModal.classList.add('hidden');
+        inviteModal.classList.remove('flex');
+      });
+
+      document.getElementById('save-room-invites-btn').addEventListener('click', async () => {
+        const room = state.roomsMap[state.activeRoomId];
+        if (!room || !isAdminUser(state.currentUser)) return;
+        const selected = Array.from(document.querySelectorAll('#edit-room-invite-list input[type="checkbox"]:checked')).map(
+          (cb) => cb.value
+        );
+        if (!selected.includes(state.currentUser.username)) {
+          selected.unshift(state.currentUser.username);
+        }
+        await upsertRoomDoc({ ...room, invitedUsers: selected });
+        inviteModal.classList.add('hidden');
+        inviteModal.classList.remove('flex');
+        showToast('已更新房間受邀成員名單', 'success');
+      });
+
+      // 管理者控制台：生成隨機密碼與建立帳號
+      document.getElementById('generate-random-pw-btn').addEventListener('click', () => {
+        document.getElementById('new-user-password').value = generateRandomPassword(12);
+      });
+
+      document.getElementById('admin-create-user-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!isAdminUser(state.currentUser)) return;
+        const uname = document.getElementById('new-user-username').value.trim();
+        const pw = document.getElementById('new-user-password').value.trim();
+        if (!uname || pw.length < 6) {
+          showToast('請輸入用戶名稱與至少 6 位密碼', 'error');
+          return;
+        }
+        if (state.usersMap[uname]) {
+          showToast('該用戶名稱已存在', 'error');
+          return;
+        }
+        await upsertUserDoc({
+          username: uname,
+          password: pw,
+          role: 'user',
+          createdAt: Date.now()
+        });
+        document.getElementById('admin-create-user-form').reset();
+        showToast(`已建立帳號「${uname}」`, 'success');
+      });
+
+      // 更改自身密碼
+      document.getElementById('change-own-password-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const curPw = document.getElementById('current-pw-input').value;
+        const nextPw = document.getElementById('new-pw-input').value;
+        const confPw = document.getElementById('confirm-pw-input').value;
+
+        if (curPw !== state.currentUser.password) {
+          showToast('目前密碼不正確', 'error');
+          return;
+        }
+        if (nextPw.length < 6) {
+          showToast('新密碼至少需要 6 個字元', 'error');
+          return;
+        }
+        if (nextPw !== confPw) {
+          showToast('兩次輸入的新密碼不一致', 'error');
+          return;
+        }
+
+        await upsertUserDoc({ ...state.currentUser, password: nextPw });
+        document.getElementById('change-own-password-form').reset();
+        showToast('密碼已成功更新', 'success');
+      });
+    }
+
+    async function bootstrap() {
+      initHourSelects();
+      bindEvents();
+      await ensureSeedRootAdmin();
+      state.usersMap = { ...memoryStore.users };
+      state.roomsMap = { ...memoryStore.rooms };
+      renderAll();
+
+      try {
+        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+          const firebaseConfig = JSON.parse(__firebase_config);
+          const app = initializeApp(firebaseConfig);
+          auth = getAuth(app);
+          db = getFirestore(app);
+
+          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+            const cred = await signInWithCustomToken(auth, __initial_auth_token);
+            currentAuthUser = cred.user;
+          } else {
+            const cred = await signInAnonymously(auth);
+            currentAuthUser = cred.user;
+          }
+          cloudEnabled = true;
+          await ensureSeedRootAdmin();
+        }
+      } catch {
+        cloudEnabled = false;
+      }
+
+      startSubscriptions();
+    }
+
+    window.addEventListener('DOMContentLoaded', bootstrap);
+  </script>
+</body>
+</html>
